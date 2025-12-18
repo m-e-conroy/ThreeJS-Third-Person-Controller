@@ -14,6 +14,8 @@ const App: React.FC = () => {
   const [showDocs, setShowDocs] = useState(false);
   const [bloomEnabled, setBloomEnabled] = useState(true);
   const [aoEnabled, setAoEnabled] = useState(true);
+  const [customModelUrl, setCustomModelUrl] = useState<string | null>(null);
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
   const uiFrameRef = useRef<number>(null);
 
   useEffect(() => {
@@ -54,6 +56,50 @@ const App: React.FC = () => {
     };
   }, [controlState, joystickState]);
 
+  // Drag and Drop Handlers
+  useEffect(() => {
+    const handleDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      setIsDraggingFile(true);
+    };
+
+    const handleDragLeave = (e: DragEvent) => {
+      e.preventDefault();
+      setIsDraggingFile(false);
+    };
+
+    const handleDrop = (e: DragEvent) => {
+      e.preventDefault();
+      setIsDraggingFile(false);
+
+      if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+        const file = e.dataTransfer.files[0];
+        if (file.name.toLowerCase().endsWith('.glb')) {
+          // Revoke previous URL if it exists
+          if (customModelUrl && customModelUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(customModelUrl);
+          }
+          const url = URL.createObjectURL(file);
+          setCustomModelUrl(url);
+          setTestAnimation(null); // Reset manual animation test
+          console.log("Loaded custom model:", file.name);
+        } else {
+          alert("Please drop a .glb file.");
+        }
+      }
+    };
+
+    window.addEventListener('dragover', handleDragOver);
+    window.addEventListener('dragleave', handleDragLeave);
+    window.addEventListener('drop', handleDrop);
+
+    return () => {
+      window.removeEventListener('dragover', handleDragOver);
+      window.removeEventListener('dragleave', handleDragLeave);
+      window.removeEventListener('drop', handleDrop);
+    };
+  }, [customModelUrl]);
+
   const handleJoystickMove = (data: { x: number; y: number; active: boolean }) => {
     joystickState.current = data;
   };
@@ -79,7 +125,19 @@ const App: React.FC = () => {
         onAnimationsLoaded={setAvailableAnimations}
         bloomEnabled={bloomEnabled}
         aoEnabled={aoEnabled}
+        customModelUrl={customModelUrl}
       />
+
+      {/* Drag Overlay */}
+      {isDraggingFile && (
+        <div className="absolute inset-0 z-[100] bg-blue-500/20 backdrop-blur-md border-4 border-dashed border-blue-400 flex items-center justify-center pointer-events-none">
+          <div className="bg-black/60 p-10 rounded-xl border border-blue-400 shadow-[0_0_50px_rgba(59,130,246,0.5)]">
+            <h2 className="font-orbitron text-2xl font-bold text-blue-300 animate-pulse uppercase tracking-widest">
+              DROP_GLB_TO_INITIALIZE
+            </h2>
+          </div>
+        </div>
+      )}
 
       {/* UI Overlay */}
       <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-6 md:p-10">
@@ -92,7 +150,7 @@ const App: React.FC = () => {
             <div className="flex items-center gap-3 mt-1">
               <span className={`w-2 h-2 rounded-full ${isBoosting ? 'bg-blue-400 animate-pulse' : 'bg-green-500'}`} />
               <p className="text-[10px] text-white/50 tracking-widest uppercase">
-                {isBoosting ? 'Overdrive_Active' : 'System_Nominal'} // V.1.0.4
+                {isBoosting ? 'Overdrive_Active' : 'System_Nominal'} // V.1.0.5
               </p>
               <div className="flex gap-2 ml-2">
                 <button 
@@ -115,6 +173,18 @@ const App: React.FC = () => {
                 </button>
               </div>
             </div>
+            {customModelUrl && (
+                <button 
+                    onClick={() => {
+                        URL.revokeObjectURL(customModelUrl);
+                        setCustomModelUrl(null);
+                        setTestAnimation(null);
+                    }}
+                    className="mt-3 px-3 py-1 bg-red-500/20 border border-red-500/50 text-red-400 text-[9px] font-orbitron hover:bg-red-500/30 transition-all rounded"
+                >
+                    RESET_TO_DEFAULT_MODEL
+                </button>
+            )}
           </div>
           
           <div className="flex flex-col items-end gap-2 font-orbitron">
@@ -154,13 +224,17 @@ const App: React.FC = () => {
         {/* Hints / Instructions for Desktop */}
         {!isMobile && (
           <div className="absolute top-1/2 right-10 -translate-y-1/2 flex flex-col gap-4 opacity-40 hover:opacity-100 transition-opacity">
-            <div className="bg-white/5 backdrop-blur-sm border border-white/10 p-3 rounded text-[10px] uppercase tracking-tighter w-32">
+            <div className="bg-white/5 backdrop-blur-sm border border-white/10 p-3 rounded text-[10px] uppercase tracking-tighter w-40">
+              <div className="text-blue-400 font-bold mb-2">HOT_KEYS</div>
               <div className="flex justify-between mb-1"><span>FORWARD</span> <span className="text-blue-400">W</span></div>
               <div className="flex justify-between mb-1"><span>BACKWARD</span> <span className="text-blue-400">S</span></div>
               <div className="flex justify-between mb-1"><span>STRAFE</span> <span className="text-blue-400">A/D</span></div>
               <div className="flex justify-between mb-1"><span>BOOST</span> <span className="text-blue-400">SHIFT</span></div>
               <div className="flex justify-between mb-1"><span>JUMP</span> <span className="text-blue-400">SPACE</span></div>
-              <div className="flex justify-between"><span>RECENTER</span> <span className="text-blue-400">R</span></div>
+              <div className="flex justify-between mb-2"><span>RECENTER</span> <span className="text-blue-400">R</span></div>
+              <div className="pt-2 border-t border-white/10 text-[8px] text-blue-400/80">
+                DRAG_DROP .GLB TO SWAP MODEL
+              </div>
             </div>
           </div>
         )}
@@ -219,31 +293,22 @@ const App: React.FC = () => {
             
             <div className="space-y-6 text-sm leading-relaxed text-white/80">
               <section>
-                <h3 className="font-orbitron text-white mb-2 uppercase tracking-widest text-xs border-b border-white/10 pb-1">01. Replace Source</h3>
-                <p>Open <code className="text-blue-300">components/GameCanvas.tsx</code> and locate the <code className="text-blue-300">MODEL_URL</code> constant at the top of the file.</p>
-                <pre className="mt-2 p-3 bg-black border border-white/5 rounded text-[11px] text-green-400 overflow-x-auto">
-                  {`const MODEL_URL = 'https://your-domain.com/character.glb';`}
-                </pre>
+                <h3 className="font-orbitron text-white mb-2 uppercase tracking-widest text-xs border-b border-white/10 pb-1">01. Dynamic Model Loading</h3>
+                <p>You can now <strong>drag and drop any .glb file</strong> directly onto the browser window. The engine will instantly swap the current phantom unit for your own model and reload the animation debugger.</p>
               </section>
 
               <section>
                 <h3 className="font-orbitron text-white mb-2 uppercase tracking-widest text-xs border-b border-white/10 pb-1">02. Inspect Animations</h3>
-                <p>Check the <strong>ANIM_DEBUGGER</strong> panel on the left side of the screen. It lists all available clips found inside your GLB file. Use these buttons to preview them manually.</p>
+                <p>Check the <strong>ANIM_DEBUGGER</strong> panel on the left side of the screen. It lists all available clips found inside your GLB file. Use these buttons to preview them manually. The auto-sync logic tries to map 'Idle', 'Walking', and 'Running' to appropriate clips.</p>
               </section>
 
               <section>
-                <h3 className="font-orbitron text-white mb-2 uppercase tracking-widest text-xs border-b border-white/10 pb-1">03. Update Logic Mapping</h3>
-                <p>Scroll down to the <code className="text-blue-300">animate</code> function in <code className="text-blue-300">GameCanvas.tsx</code>. Update the <code className="text-blue-300">nextAction</code> string names to match your model's specific animation names:</p>
-                <pre className="mt-2 p-3 bg-black border border-white/5 rounded text-[11px] text-green-400 overflow-x-auto">
-                  {`let nextAction = 'Idle';
-if (!isGrounded) nextAction = 'Jump';
-else if (speed > 7.0) nextAction = 'Run'; // Rename to match your GLB
-else if (speed > 0.5) nextAction = 'Walk';`}
-                </pre>
+                <h3 className="font-orbitron text-white mb-2 uppercase tracking-widest text-xs border-b border-white/10 pb-1">03. Custom Mapping</h3>
+                <p>To fix animation mapping for your specific model, check the <code className="text-blue-300">update</code> method in <code className="text-blue-300">entities/Character.ts</code>. It includes a fallback system that tries common naming conventions.</p>
               </section>
 
               <section className="p-4 bg-blue-500/5 border border-blue-500/20 rounded italic">
-                Tip: The engine now includes <strong>UnrealBloomPass</strong> and <strong>SSAOPass</strong>. Ambient Occlusion adds realistic contact shadows where the character meets the ground and in between its mechanical parts.
+                Note: Performance varies depending on model complexity. Models with excessive polycounts or large textures might cause stuttering during initialization.
               </section>
             </div>
           </div>
