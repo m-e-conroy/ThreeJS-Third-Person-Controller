@@ -1,0 +1,5 @@
+{
+  "name": "ThreeJS Third Person Controller",
+  "description": "A high-performance base for a third-person game using Three.js, featuring responsive controls for desktop (keyboard), mobile (on-screen joystick), and gamepads.",
+  "requestFramePermissions": []
+}
